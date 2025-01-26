@@ -117,6 +117,54 @@ describe("DatadogService", () => {
     });
   });
 
+  describe("batch processing", () => {
+    it("should process metrics in configured batch size", async () => {
+      const service = new DatadogService({ batchSize: 2 });
+      mockSubmitMetrics.mockResolvedValue({ status: "ok" });
+
+      // Create a payload with 3 metrics
+      const batchTestPayload: MetricPayload = {
+        series: [
+          {
+            metric: "ci.workflow.duration",
+            type: 3,
+            points: [{ timestamp: 1706054675, value: 15.5 }],
+            unit: "minutes",
+            tags: standardTags,
+          },
+          {
+            metric: "ci.workflow.duration",
+            type: 3,
+            points: [{ timestamp: 1706054676, value: 16.5 }],
+            unit: "minutes",
+            tags: standardTags,
+          },
+          {
+            metric: "ci.workflow.duration",
+            type: 3,
+            points: [{ timestamp: 1706054677, value: 17.5 }],
+            unit: "minutes",
+            tags: standardTags,
+          },
+        ],
+      };
+
+      await service.submitMetrics(batchTestPayload, ["workflow-1", "workflow-2", "workflow-3"]);
+
+      // Should have been called twice: once for first two metrics, once for the last metric
+      expect(mockSubmitMetrics).toHaveBeenCalledTimes(2);
+
+      // Verify first batch
+      expect(mockSubmitMetrics.mock.calls[0][0].body.series).toHaveLength(2);
+      expect(mockSubmitMetrics.mock.calls[0][0].body.series[0].points[0].value).toBe(15.5);
+      expect(mockSubmitMetrics.mock.calls[0][0].body.series[1].points[0].value).toBe(16.5);
+
+      // Verify second batch
+      expect(mockSubmitMetrics.mock.calls[1][0].body.series).toHaveLength(1);
+      expect(mockSubmitMetrics.mock.calls[1][0].body.series[0].points[0].value).toBe(17.5);
+    });
+  });
+
   describe("exactly once behavior", () => {
     it("should register workflow in cache only after successful API call", async () => {
       const service = new DatadogService();

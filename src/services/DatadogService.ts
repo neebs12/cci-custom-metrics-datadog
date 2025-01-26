@@ -8,9 +8,11 @@ export class DatadogService {
   private metricsApi: v2.MetricsApi;
   private dryRun: boolean;
   private workflowCache: WorkflowCache;
+  private batchSize: number;
 
-  constructor(options?: { dryRun?: boolean }) {
+  constructor(options?: { dryRun?: boolean; batchSize?: number }) {
     this.dryRun = options?.dryRun ?? false;
+    this.batchSize = options?.batchSize ?? 10;
 
     // Initialize workflow cache with appropriate filename
     let filename = this.dryRun ? "sent-workflows-dry-run.json" : "sent-workflows.json";
@@ -75,30 +77,38 @@ export class DatadogService {
       return;
     }
 
-    this.logMetricPayload(payload);
+    // Process in configured batch size
+    for (let i = 0; i < newWorkflows.length; i += this.batchSize) {
+      const batchWorkflows = newWorkflows.slice(i, i + this.batchSize);
 
-    if (this.dryRun) {
-      console.log("✨ Dry run complete - metrics logged to file");
-      console.log("Would have processed workflows:", newWorkflows);
-      this.workflowCache.markAsSent(newWorkflows); // Save to dry run cache
-      return;
-    }
+      // Create a batch payload with corresponding series
+      const batchPayload: MetricPayload = {
+        series: payload.series.slice(i, i + this.batchSize)
+      };
 
-    try {
-      const response = await this.metricsApi.submitMetrics({
-        body: payload,
-      });
-      console.log("Metrics submitted successfully:", response);
+      this.logMetricPayload(batchPayload);
 
-      // Save workflow IDs to cache after successful submission
-      this.workflowCache.markAsSent(newWorkflows);
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error("Error submitting metrics:", error.message);
-        throw error;
+      try {
+        if (!this.dryRun) {
+          const response = await this.metricsApi.submitMetrics({
+            body: batchPayload,
+          });
+          console.log(`Batch ${i/this.batchSize + 1} metrics submitted successfully:`, response);
+        } else {
+          console.log("✨ Dry run complete - metrics logged to file");
+          console.log("Would have processed workflows:", batchWorkflows);
+        }
+
+        // Mark workflows as sent for this batch, regardless of dry run
+        this.workflowCache.markAsSent(batchWorkflows);
+      } catch (error) {
+        if (error instanceof Error) {
+          console.error("Error submitting metrics:", error.message);
+          throw error;
+        }
+        console.error("Unknown error submitting metrics:", error);
+        throw new Error("Unknown error submitting metrics");
       }
-      console.error("Unknown error submitting metrics:", error);
-      throw new Error("Unknown error submitting metrics");
     }
   }
 }
