@@ -32,6 +32,7 @@ This document outlines the implementation plan for ensuring at-least-once delive
 
 1. Dependencies
 ```bash
+# ALREADY INSTALLED
 npm install better-sqlite3
 npm install --save-dev @types/better-sqlite3
 ```
