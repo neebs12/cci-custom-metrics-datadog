@@ -15,10 +15,10 @@ async function processFile(filePath: string, datadogService: DatadogService): Pr
     const workflowData: BigQueryWorkflowData[] = JSON.parse(rawData);
 
     // Transform data to Datadog metrics format
-    const metricPayload = transformToDatadogMetric(workflowData);
+    const [metricPayload, workflowIds] = transformToDatadogMetric(workflowData);
 
     // Submit metrics to Datadog
-    await datadogService.submitMetrics(metricPayload);
+    await datadogService.submitMetrics(metricPayload, workflowIds);
     console.log(`Successfully processed and submitted metrics from ${filePath}`);
   } catch (error) {
     console.error(`Error processing file ${filePath}:`, error);

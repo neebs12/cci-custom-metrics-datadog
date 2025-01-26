@@ -1,6 +1,5 @@
 import { BigQueryWorkflowData } from "../types/bigquery";
 import { BranchType, MetricPayload, ProcessedTags, StatusType, MetricSeries } from "../types/datadog";
-import { v2 } from "@datadog/datadog-api-client";
 
 const METRIC_NAME = "ci.workflow.duration";
 const ENV_TAG = "env:ci";
@@ -92,7 +91,7 @@ const parseTimestamp = (dateStr: string): number => {
 
 export const transformToDatadogMetric = (
   data: BigQueryWorkflowData[]
-): MetricPayload => {
+): [MetricPayload, string[]] => {
   const series = data
     .map((record) => {
       const tags = processTags(record);
@@ -117,5 +116,5 @@ export const transformToDatadogMetric = (
     })
     .filter((series): series is NonNullable<typeof series> => series !== null);
 
-  return { series };
+  return [{ series }, data.map(d => d.workflow_id)];
 };

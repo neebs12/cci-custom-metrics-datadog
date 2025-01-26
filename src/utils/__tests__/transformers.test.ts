@@ -3,6 +3,7 @@ import { transformToDatadogMetric } from "../transformers";
 
 describe("transformToDatadogMetric", () => {
   const mockTimestamp = 1706054675; // Fixed timestamp for testing
+  const workflowId = "d744b9ea-7e3c-4e1a-9df8-721e4f6ea67f";
   const baseWorkflowData: BigQueryWorkflowData = {
     minutes: "15.5",
     created_at: "2025-01-24 14:04:35.000000 UTC",
@@ -10,7 +11,7 @@ describe("transformToDatadogMetric", () => {
     workflow_name: "build_test_deploy",
     status: "success",
     project_slug: "gh/HnryNZ/hnry-rails",
-    workflow_id: "d744b9ea-7e3c-4e1a-9df8-721e4f6ea67f",
+    workflow_id: workflowId,
   };
 
   beforeAll(() => {
@@ -23,11 +24,17 @@ describe("transformToDatadogMetric", () => {
     jest.useRealTimers();
   });
 
+  it ("should return the correct workflow id", () => {
+    const result = transformToDatadogMetric([baseWorkflowData]);
+
+    expect(result[1][0]).toEqual(workflowId);
+  })
+
   it("should transform valid workflow data correctly", () => {
     const result = transformToDatadogMetric([baseWorkflowData]);
 
-    expect(result.series).toHaveLength(1);
-    expect(result.series[0]).toMatchObject({
+    expect(result[0].series).toHaveLength(1);
+    expect(result[0].series[0]).toMatchObject({
       metric: "ci.workflow.duration",
       type: 3,
       points: [
@@ -55,7 +62,7 @@ describe("transformToDatadogMetric", () => {
 
     const result = transformToDatadogMetric([data]);
 
-    expect(result.series[0].tags).toContain("branch:null");
+    expect(result[0].series[0].tags).toContain("branch:null");
   });
 
   it("should convert non-master/staging/uat branches to feature", () => {
@@ -66,7 +73,7 @@ describe("transformToDatadogMetric", () => {
 
     const result = transformToDatadogMetric([data]);
 
-    expect(result.series[0].tags).toContain("branch:feature");
+    expect(result[0].series[0].tags).toContain("branch:feature");
   });
 
   it("should keep master/staging/uat branches as-is", () => {
@@ -79,7 +86,7 @@ describe("transformToDatadogMetric", () => {
       };
 
       const result = transformToDatadogMetric([data]);
-      expect(result.series[0].tags).toContain(`branch:${branch}`);
+      expect(result[0].series[0].tags).toContain(`branch:${branch}`);
     });
   });
 
@@ -91,7 +98,7 @@ describe("transformToDatadogMetric", () => {
 
     const result = transformToDatadogMetric([data]);
 
-    expect(result.series).toHaveLength(0);
+    expect(result[0].series).toHaveLength(0);
   });
 
   it("should skip records with null values (except branch)", () => {
@@ -110,9 +117,9 @@ describe("transformToDatadogMetric", () => {
       const result = transformToDatadogMetric([testData as BigQueryWorkflowData]);
       if (testData?.branch === null) {
         // Only branch can be null
-        expect(result.series).toHaveLength(1);
+        expect(result[0].series).toHaveLength(1);
       } else {
-        expect(result.series).toHaveLength(0);
+        expect(result[0].series).toHaveLength(0);
       }
     });
   });
@@ -133,9 +140,9 @@ describe("transformToDatadogMetric", () => {
 
     const result = transformToDatadogMetric(data);
 
-    expect(result.series).toHaveLength(2);
-    expect(result.series[0].tags).toContain("branch:master");
-    expect(result.series[1].tags).toContain("branch:staging");
+    expect(result[0].series).toHaveLength(2);
+    expect(result[0].series[0].tags).toContain("branch:master");
+    expect(result[0].series[1].tags).toContain("branch:staging");
   });
 
   it("should parse minutes to float correctly", () => {
@@ -146,13 +153,13 @@ describe("transformToDatadogMetric", () => {
 
     const result = transformToDatadogMetric([data]);
 
-    expect(result.series[0].points[0].value).toBe(15.116666666666667);
+    expect(result[0].series[0].points[0].value).toBe(15.116666666666667);
   });
 
   it("should always include env:ci tag", () => {
     const result = transformToDatadogMetric([baseWorkflowData]);
 
-    expect(result.series[0].tags).toContain("env:ci");
+    expect(result[0].series[0].tags).toContain("env:ci");
   });
 
   it("should skip records with missing required tags", () => {
@@ -164,15 +171,15 @@ describe("transformToDatadogMetric", () => {
 
     testCases.forEach(testCase => {
       const result = transformToDatadogMetric([testCase]);
-      expect(result.series).toHaveLength(0);
+      expect(result[0].series).toHaveLength(0);
     });
   });
 
   it("should require all mandatory tags to be present", () => {
     const result = transformToDatadogMetric([baseWorkflowData]);
 
-    expect(result.series).toHaveLength(1);
-    const series = result.series[0];
+    expect(result[0].series).toHaveLength(1);
+    const series = result[0].series[0];
     expect(series).toBeDefined();
     expect(series.tags).toBeDefined();
     const requiredTags = ["env:ci", "project_slug:", "branch:", "workflow:", "status:"];
