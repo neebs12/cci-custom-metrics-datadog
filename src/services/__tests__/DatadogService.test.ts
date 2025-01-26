@@ -16,6 +16,13 @@ jest.mock("@datadog/datadog-api-client", () => ({
 
 describe("DatadogService", () => {
   const mockApiKey = "test-api-key";
+  const standardTags = [
+    "env:ci",
+    "project_slug:gh/HnryNZ/hnry-rails",
+    "branch:master",
+    "workflow:build_test_deploy",
+    "status:success",
+  ];
   let service: DatadogService;
   let mockSubmitMetrics: jest.Mock;
 
@@ -56,7 +63,7 @@ describe("DatadogService", () => {
           type: 3,
           points: [{ timestamp: 1706054675, value: 15.5 }],
           unit: "minutes",
-          tags: ["env:ci", "branch:master"],
+          tags: standardTags,
         },
       ],
     };
@@ -81,7 +88,7 @@ describe("DatadogService", () => {
           type: 3,
           points: [{ timestamp: 1706054675, value: 15.5 }],
           unit: "minutes",
-          tags: ["env:ci", "branch:master"],
+          tags: standardTags,
         },
       ],
     };
@@ -99,7 +106,7 @@ describe("DatadogService", () => {
           type: 3,
           points: [{ timestamp: 1706054675, value: 15.5 }],
           unit: "minutes",
-          tags: ["env:ci", "branch:master"],
+          tags: standardTags,
         },
       ],
     };

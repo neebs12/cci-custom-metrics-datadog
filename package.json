@@ -4,7 +4,7 @@
   "description": "This repos is for gathering useful insights from Circle CI. The goal here is to gather make data-driven decisions when prioritizing work in improving our CI pipeline",
   "main": "index.js",
   "scripts": {
-    "test": "jest --silent",
+    "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "start": "npm run build && node dist/index.js",
