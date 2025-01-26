@@ -70,20 +70,37 @@ export class DatadogService {
   }
 
   async submitMetrics(payload: MetricPayload, workflowIds: string[]): Promise<void> {
-    const newWorkflows = this.workflowCache.filterNewWorkflows(workflowIds);
-
-    if (newWorkflows.length === 0) {
-      console.log("All workflows have already been processed, skipping");
-      return;
+    // 1. First validate lengths match
+    if (payload.series.length !== workflowIds.length) {
+      // console.log({payload, workflowIds})
+      const error = `Mismatch between series (${payload.series.length}) and workflow IDs (${workflowIds.length})`;
+      console.error(error);
+      throw new Error(error);
     }
 
-    // Process in configured batch size
-    for (let i = 0; i < newWorkflows.length; i += this.batchSize) {
-      const batchWorkflows = newWorkflows.slice(i, i + this.batchSize);
+    // 2. Create paired array
+    const paired = payload.series.map((series, index) => ({
+      payload: series,
+      workflowId: workflowIds[index]
+    }));
 
-      // Create a batch payload with corresponding series
+    // 3. Process in configured batch size
+    for (let i = 0; i < paired.length; i += this.batchSize) {
+      const batch = paired.slice(i, i + this.batchSize);
+
+      // 4. Filter new workflows within this batch
+      const newWorkflowPairs = batch.filter(pair =>
+        !this.workflowCache.hasBeenSent(pair.workflowId)
+      );
+
+      if (newWorkflowPairs.length === 0) {
+        console.log(`Batch ${i/this.batchSize + 1}: All workflows already processed, skipping`);
+        continue;
+      }
+
+      // 5. Reconstruct payload for new workflows
       const batchPayload: MetricPayload = {
-        series: payload.series.slice(i, i + this.batchSize)
+        series: newWorkflowPairs.map(pair => pair.payload)
       };
 
       this.logMetricPayload(batchPayload);
@@ -96,11 +113,11 @@ export class DatadogService {
           console.log(`Batch ${i/this.batchSize + 1} metrics submitted successfully:`, response);
         } else {
           console.log("✨ Dry run complete - metrics logged to file");
-          console.log("Would have processed workflows:", batchWorkflows);
+          console.log("Would have processed workflows:", newWorkflowPairs.map(p => p.workflowId));
         }
 
-        // Mark workflows as sent for this batch, regardless of dry run
-        this.workflowCache.markAsSent(batchWorkflows);
+        // Mark only the new workflows as sent
+        this.workflowCache.markAsSent(newWorkflowPairs.map(p => p.workflowId));
       } catch (error) {
         if (error instanceof Error) {
           console.error("Error submitting metrics:", error.message);

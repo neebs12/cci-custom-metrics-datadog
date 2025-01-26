@@ -14,7 +14,7 @@ const processBranch = (branch: string | null): BranchType => {
 };
 
 const processStatus = (status: string): StatusType | null => {
-  if (status === "success" || status === "failure") {
+  if (status === "success" || status === "failed") {
     return status as StatusType;
   }
   return null;
@@ -92,29 +92,36 @@ const parseTimestamp = (dateStr: string): number => {
 export const transformToDatadogMetric = (
   data: BigQueryWorkflowData[]
 ): [MetricPayload, string[]] => {
-  const series = data
-    .map((record) => {
-      const tags = processTags(record);
-      if (!tags) return null;
 
-      const formattedTags = formatTags(tags);
-      if (!formattedTags) return null;
+  const seriesWithNulls = data
+  .map((record) => {
+    const tags = processTags(record);
+    if (!tags) return null;
 
-      const series: MetricSeries = {
-        metric: METRIC_NAME,
-        type: 3, // MetricIntakeType.GAUGE
-        points: [
-          {
-            timestamp: parseTimestamp(record.created_at),
-            value: parseFloat(record.minutes),
-          },
-        ],
-        unit: "minutes",
-        tags: formattedTags,
-      };
-      return series;
-    })
-    .filter((series): series is NonNullable<typeof series> => series !== null);
+    const formattedTags = formatTags(tags);
+    if (!formattedTags) return null;
 
-  return [{ series }, data.map(d => d.workflow_id)];
+    const series: MetricSeries = {
+      metric: METRIC_NAME,
+      type: 3, // MetricIntakeType.GAUGE
+      points: [
+        {
+          timestamp: parseTimestamp(record.created_at),
+          value: parseFloat(record.minutes),
+        },
+      ],
+      unit: "minutes",
+      tags: formattedTags,
+    };
+    return series;
+  })
+
+  const series = seriesWithNulls.filter((sNull): sNull is NonNullable<typeof sNull> => sNull !== null);
+  // return only workflow ids which are NOT nulled
+  const workflowIds = data.map(d => d.workflow_id).filter((_, ind) => {
+    return seriesWithNulls[ind] !== null
+  })
+
+
+  return [{ series }, workflowIds];
 };

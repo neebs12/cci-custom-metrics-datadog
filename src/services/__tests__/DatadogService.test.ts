@@ -80,14 +80,89 @@ describe("DatadogService", () => {
     expect(() => new DatadogService()).toThrow("DD_API_KEY environment variable is required");
   });
 
-  it("should submit metrics successfully", async () => {
+  it("should throw error when series and workflow IDs length mismatch", async () => {
+    await expect(service.submitMetrics(mockPayload, ["workflow-1", "workflow-2"]))
+      .rejects
+      .toThrow("Mismatch between series (1) and workflow IDs (2)");
+  });
+
+  it("should submit metrics successfully with proper pairing", async () => {
     mockSubmitMetrics.mockResolvedValueOnce({ status: "ok" });
 
-    await service.submitMetrics(mockPayload, ["workflow-1"]);
+    const multiPayload: MetricPayload = {
+      series: [
+        {
+          metric: "ci.workflow.duration",
+          type: 3,
+          points: [{ timestamp: 1706054675, value: 15.5 }],
+          unit: "minutes",
+          tags: standardTags,
+        },
+        {
+          metric: "ci.workflow.duration",
+          type: 3,
+          points: [{ timestamp: 1706054676, value: 16.5 }],
+          unit: "minutes",
+          tags: standardTags,
+        }
+      ]
+    };
+
+    await service.submitMetrics(multiPayload, ["workflow-1", "workflow-2"]);
 
     expect(mockSubmitMetrics).toHaveBeenCalledWith({
-      body: mockPayload,
+      body: multiPayload,
     });
+  });
+
+  it("should process and filter metrics in batches", async () => {
+    const service = new DatadogService({ batchSize: 2 });
+    mockSubmitMetrics.mockResolvedValue({ status: "ok" });
+
+    // Pre-mark one workflow as sent
+    const cache = new WorkflowCache("sent-workflows-test.json");
+    cache.markAsSent(["workflow-2"]);
+
+    // Create a payload with 3 metrics
+    const batchTestPayload: MetricPayload = {
+      series: [
+        {
+          metric: "ci.workflow.duration",
+          type: 3,
+          points: [{ timestamp: 1706054675, value: 15.5 }],
+          unit: "minutes",
+          tags: standardTags,
+        },
+        {
+          metric: "ci.workflow.duration",
+          type: 3,
+          points: [{ timestamp: 1706054676, value: 16.5 }],
+          unit: "minutes",
+          tags: standardTags,
+        },
+        {
+          metric: "ci.workflow.duration",
+          type: 3,
+          points: [{ timestamp: 1706054677, value: 17.5 }],
+          unit: "minutes",
+          tags: standardTags,
+        }
+      ]
+    };
+
+    await service.submitMetrics(batchTestPayload, ["workflow-1", "workflow-2", "workflow-3"]);
+
+    // Should have been called twice: first batch with workflow-1, second batch with workflow-3
+    // workflow-2 should be skipped as it's already marked as sent
+    expect(mockSubmitMetrics).toHaveBeenCalledTimes(2);
+
+    // First batch should contain workflow-1's metric
+    expect(mockSubmitMetrics.mock.calls[0][0].body.series).toHaveLength(1);
+    expect(mockSubmitMetrics.mock.calls[0][0].body.series[0].points[0].value).toBe(15.5);
+
+    // Second batch should contain workflow-3's metric
+    expect(mockSubmitMetrics.mock.calls[1][0].body.series).toHaveLength(1);
+    expect(mockSubmitMetrics.mock.calls[1][0].body.series[0].points[0].value).toBe(17.5);
   });
 
   it("should handle API errors", async () => {
@@ -211,12 +286,42 @@ describe("DatadogService", () => {
       const service = new DatadogService();
       mockSubmitMetrics.mockResolvedValue({ status: "ok" });
 
+      // Create a payload with 3 metrics
+      const batchTestPayload: MetricPayload = {
+        series: [
+          {
+            metric: "ci.workflow.duration",
+            type: 3,
+            points: [{ timestamp: 1706054675, value: 15.5 }],
+            unit: "minutes",
+            tags: standardTags,
+          },
+          {
+            metric: "ci.workflow.duration",
+            type: 3,
+            points: [{ timestamp: 1706054676, value: 16.5 }],
+            unit: "minutes",
+            tags: standardTags,
+          },
+          {
+            metric: "ci.workflow.duration",
+            type: 3,
+            points: [{ timestamp: 1706054677, value: 17.5 }],
+            unit: "minutes",
+            tags: standardTags,
+          },
+        ],
+      };
+
+      const firstPayload = {series: batchTestPayload.series.slice(0, 2)};
+      const secondPayload = {series: batchTestPayload.series.slice(1, 3)};
+
       // First batch
-      await service.submitMetrics(mockPayload, ["workflow-1", "workflow-2"]);
+      await service.submitMetrics(firstPayload, ["workflow-1", "workflow-2"]);
       expect(mockSubmitMetrics).toHaveBeenCalledTimes(1);
 
       // Second batch with one new and one already sent
-      await service.submitMetrics(mockPayload, ["workflow-2", "workflow-3"]);
+      await service.submitMetrics(secondPayload, ["workflow-2", "workflow-3"]);
 
       const cache = new WorkflowCache("sent-workflows-test.json");
       expect(cache.hasBeenSent("workflow-1")).toBe(true);

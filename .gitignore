@@ -4,3 +4,4 @@ outputs/
 .env
 log/
 .DS_Store
+data/*.json

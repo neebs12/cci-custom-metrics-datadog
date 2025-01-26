@@ -90,7 +90,7 @@ describe("transformToDatadogMetric", () => {
     });
   });
 
-  it("should skip records with non-success/failure status", () => {
+  it("should skip records with non-success/failed status", () => {
     const data = {
       ...baseWorkflowData,
       status: "cancelled",
