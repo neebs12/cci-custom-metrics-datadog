@@ -28,8 +28,13 @@ async function processFile(filePath: string, datadogService: DatadogService): Pr
 
 async function main() {
   try {
-    // Initialize Datadog service
-    const datadogService = new DatadogService();
+    // Initialize Datadog service with dry run option
+    const isDryRun = process.env.DRY_RUN === "true";
+    const datadogService = new DatadogService({ dryRun: isDryRun });
+
+    if (isDryRun) {
+      console.log("🔧 Running in DRY RUN mode - no metrics will be submitted to Datadog");
+    }
 
     // Get all JSON files from the data directory
     const dataDir = join(__dirname, "..", "data");

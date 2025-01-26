@@ -9,6 +9,8 @@
     "test:coverage": "jest --coverage",
     "start": "npm run build && node dist/index.js",
     "start:dev": "ts-node ./src",
+    "start:dry": "DRY_RUN=true npm run start",
+    "start:dev:dry": "DRY_RUN=true npm run start:dev",
     "build": "tsc"
   },
   "keywords": [],

@@ -113,4 +113,30 @@ describe("DatadogService", () => {
 
     await expect(service.submitMetrics(mockPayload)).rejects.toThrow("Unknown error submitting metrics");
   });
+
+  describe("Dry Run Mode", () => {
+    it("should not submit metrics to Datadog in dry run mode", async () => {
+      const dryRunService = new DatadogService({ dryRun: true });
+      const consoleSpy = jest.spyOn(console, 'log');
+
+      const mockPayload: MetricPayload = {
+        series: [
+          {
+            metric: "ci.workflow.duration",
+            type: 3,
+            points: [{ timestamp: 1706054675, value: 15.5 }],
+            unit: "minutes",
+            tags: standardTags,
+          },
+        ],
+      };
+
+      await dryRunService.submitMetrics(mockPayload);
+
+      expect(mockSubmitMetrics).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Dry run"));
+
+      consoleSpy.mockRestore();
+    });
+  });
 });

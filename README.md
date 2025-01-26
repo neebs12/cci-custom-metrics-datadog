@@ -116,16 +116,56 @@ npm install
 # Run in development mode
 npm run start:dev
 
+# Run in dry run mode (development)
+npm run start:dev:dry
+
 # Build
 npm run build
 
 # Run built version
 npm start
 
+# Run built version in dry run mode
+npm run start:dry
+
 # Run tests
 npm test              # Run tests once
 npm run test:watch    # Run tests in watch mode
 npm run test:coverage # Run tests with coverage report
+```
+
+## Dry Run Mode
+
+The service supports a dry run mode that logs what would be sent to Datadog without making actual API calls. This is useful for testing and verification.
+
+When running in dry run mode:
+- No metrics are sent to Datadog
+- All metric details are logged to timestamped files in the `log/` directory
+- Log files follow the format: `log/YYYY-MM-DDTHH-mm-ss-sssZ.log`
+- Each log file contains the full metric payload, including tags and values
+- The log directory is git-ignored to prevent committing log files
+
+Example log file content:
+```
+=== Metric Submission Details ===
+🔧 DRY RUN - No actual API call will be made
+
+Metric: ci.workflow.duration
+Type: 3
+Unit: minutes
+
+Timestamp: 1706054675 (2024-01-23T21:37:55.000Z)
+Value: 15.5 minutes
+
+Tags:
+  env:ci
+  project_slug:gh/HnryNZ/hnry-rails
+  branch:master
+  workflow:build_test_deploy
+  status:success
+
+Endpoint: /api/v2/series
+==============================
 ```
 
 ## Testing
