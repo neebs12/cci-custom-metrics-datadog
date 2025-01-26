@@ -8,13 +8,11 @@ This document outlines the implementation plan for ensuring at-least-once delive
 ### 1. SQLite Metrics Store
 - Uses `better-sqlite3` for efficient SQLite operations
 - Stores workflow IDs that have been successfully sent
-- Supports batch operations for performance
+- Simple schema with just workflow_id as primary key
 - Schema:
   ```sql
   CREATE TABLE sent_metrics (
-    workflow_id TEXT PRIMARY KEY,
-    sent_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL
+    workflow_id TEXT PRIMARY KEY
   )
   ```
 
@@ -71,18 +69,20 @@ export class MetricsStore {
   }
 
   private initialize(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS sent_metrics (
-        workflow_id TEXT PRIMARY KEY,
-        sent_at INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-      )
-    `);
+    // Check if table exists
+    const tableExists = this.db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type='table' AND name='sent_metrics'
+    `).get();
 
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_sent_at
-      ON sent_metrics(sent_at)
-    `);
+    if (!tableExists) {
+      this.db.exec(`
+        CREATE TABLE sent_metrics (
+          workflow_id TEXT PRIMARY KEY
+        )
+      `);
+    }
   }
 
   public hasBeenSent(workflowId: string): boolean {
@@ -91,12 +91,8 @@ export class MetricsStore {
   }
 
   public markAsSent(workflowId: string): void {
-    const now = Math.floor(Date.now() / 1000);
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO sent_metrics (workflow_id, sent_at, created_at)
-      VALUES (?, ?, ?)
-    `);
-    stmt.run(workflowId, now, now);
+    const stmt = this.db.prepare('INSERT OR IGNORE INTO sent_metrics (workflow_id) VALUES (?)');
+    stmt.run(workflowId);
   }
 
   public filterSentWorkflows(workflowIds: string[]): {
@@ -118,13 +114,6 @@ export class MetricsStore {
       sent: workflowIds.filter(id => sentIds.has(id)),
       unsent: workflowIds.filter(id => !sentIds.has(id))
     };
-  }
-
-  public cleanupOldRecords(olderThanDays: number): number {
-    const cutoff = Math.floor(Date.now() / 1000) - (olderThanDays * 24 * 60 * 60);
-    const stmt = this.db.prepare('DELETE FROM sent_metrics WHERE sent_at < ?');
-    const result = stmt.run(cutoff);
-    return result.changes;
   }
 
   public close(): void {
@@ -277,6 +266,23 @@ describe('MetricsStore', () => {
     expect(sent).toEqual(['workflow-1']);
     expect(unsent).toEqual(['workflow-2', 'workflow-3']);
   });
+
+  it('should create table only if it does not exist', () => {
+    // Create a new database with our table
+    const store1 = new MetricsStore(testDbPath);
+    store1.markAsSent('test-1');
+
+    // Drop and recreate table to simulate missing table in existing db
+    store1.db.exec('DROP TABLE sent_metrics');
+
+    // New instance should recreate the table
+    const store2 = new MetricsStore(testDbPath);
+    store2.markAsSent('test-2');
+    expect(store2.hasBeenSent('test-2')).toBe(true);
+
+    store1.close();
+    store2.close();
+  });
 });
 ```
 
@@ -318,42 +324,6 @@ describe('DatadogService', () => {
   });
 });
 ```
-
-## Error Handling
-
-1. Database Errors
-- Connection issues
-- Write failures
-- Corrupt database recovery
-
-2. API Errors
-- Network failures
-- Rate limiting
-- Authentication issues
-
-## Performance Considerations
-
-1. Database Optimization
-- Proper indexing
-- Batch operations
-- Connection pooling
-
-2. Memory Usage
-- Efficient batch processing
-- Proper cleanup of old records
-- Resource management
-
-## Future Enhancements
-
-1. Potential Features
-- Retention policy for old records
-- Metrics about successful/failed submissions
-- Advanced querying capabilities
-
-2. Monitoring
-- Database size monitoring
-- Performance metrics
-- Error rate tracking
 
 ## Migration Plan
 
