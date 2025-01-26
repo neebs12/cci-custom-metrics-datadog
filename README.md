@@ -121,12 +121,72 @@ npm run build
 
 # Run built version
 npm start
+
+# Run tests
+npm test              # Run tests once
+npm run test:watch    # Run tests in watch mode
+npm run test:coverage # Run tests with coverage report
 ```
+
+## Testing
+
+The project includes comprehensive test coverage:
+
+### Transformer Tests
+- Validation of branch name processing rules
+- Handling of null values
+- Status filtering (success/failure)
+- Tag formatting
+- Multiple record processing
+- Timestamp and duration parsing
+
+### Datadog Service Tests
+- API integration testing with mocked responses
+- Error handling scenarios
+- Environment configuration validation
+
+## Implementation Details
+
+### Data Processing
+- Processes all JSON files in the data/ directory
+- Skips records with null values (except branch field)
+- Transforms branch names:
+  * master/staging/uat → kept as-is
+  * null → "branch:null"
+  * others → "branch:feature"
+- Only processes success/failure statuses
+- Parses and validates timestamps and durations
+- Validates required tags:
+  * All metrics must include these tags:
+    - env:ci
+    - project_slug:<value>
+    - branch:<value>
+    - workflow:<value>
+    - status:<value>
+  * Records missing any required tags are skipped
+
+### Datadog Integration
+- Submits metrics as gauge type
+- Includes required tags:
+  * env:ci (always included)
+  * project_slug
+  * branch
+  * workflow
+  * status
+- Handles API errors with proper logging
+- Supports batch processing of multiple records
 
 ## Notes
 
 - Metrics are submitted as gauge type
 - Historical metrics ingestion must be enabled in Datadog
 - Billing is based on cardinality (metric name + tag permutations)
-- Only successful workflow data is processed initially
+- Only explicitly successful/failed workflow data is processed initially
 - Records with null values in any fields (except branch) are skipped
+
+## Error Handling
+
+- Validates environment variables
+- Skips invalid records without failing the entire process
+- Proper error logging for API failures
+- Type-safe implementation with TypeScript

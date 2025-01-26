@@ -4,6 +4,7 @@ import { v2 } from "@datadog/datadog-api-client";
 
 const METRIC_NAME = "ci.workflow.duration";
 const ENV_TAG = "env:ci";
+const REQUIRED_TAGS = ["env:ci", "project_slug", "branch", "workflow", "status"] as const;
 
 const processBranch = (branch: string | null): BranchType => {
   if (branch === null) return "null";
@@ -46,14 +47,43 @@ const processTags = (data: BigQueryWorkflowData): ProcessedTags | null => {
   };
 };
 
-const formatTags = (tags: ProcessedTags): string[] => {
-  return [
+const formatTags = (tags: ProcessedTags): string[] | null => {
+  const formattedTags = [
     ENV_TAG,
     `project_slug:${tags.project_slug}`,
     `branch:${tags.branch}`,
     `workflow:${tags.workflow}`,
     `status:${tags.status}`,
   ];
+
+  // Verify all required tags are present and have values
+  // Iterate through REQUIRED_TAGS and see if they are present in `formattedTags`
+  const missingTags = REQUIRED_TAGS.filter(tag => {
+    let fullTag = "";
+    if (tag === ENV_TAG) {
+      fullTag = ENV_TAG
+    } else {
+      fullTag = `${tag}:${tags[tag.split(":")[0] as keyof ProcessedTags]}`
+    }
+    return !formattedTags.includes(fullTag);
+  });
+
+  if (missingTags.length > 0) {
+    console.error(`Missing required tags: ${missingTags.join(", ")}`);
+    return null;
+  }
+
+  // Verify that the tag values are not empty, otherwise return null
+  const foundMissingValues = formattedTags.some(tag => {
+    const parts = tag.split(":");
+    return parts[1] === undefined || parts[1].trim().length === 0;
+  });
+
+  if (foundMissingValues) {
+    return null;
+  }
+
+  return formattedTags;
 };
 
 const parseTimestamp = (dateStr: string): number => {
@@ -68,6 +98,9 @@ export const transformToDatadogMetric = (
       const tags = processTags(record);
       if (!tags) return null;
 
+      const formattedTags = formatTags(tags);
+      if (!formattedTags) return null;
+
       const series: MetricSeries = {
         metric: METRIC_NAME,
         type: 3, // MetricIntakeType.GAUGE
@@ -78,7 +111,7 @@ export const transformToDatadogMetric = (
           },
         ],
         unit: "minutes",
-        tags: formatTags(tags),
+        tags: formattedTags,
       };
       return series;
     })
